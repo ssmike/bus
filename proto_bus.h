@@ -41,18 +41,18 @@ public:
 
 protected:
     template<typename RequestProto, typename ResponseProto>
-    void register_handler(uint32_t method, std::function<Future<ResponseProto>(RequestProto)> handler) {
-        register_raw_handler(method, [handler=std::move(handler)] (std::string str) {
+    void register_handler(uint32_t method, std::function<Future<ResponseProto>(int, RequestProto)> handler) {
+        register_raw_handler(method, [handler=std::move(handler)] (int endp, std::string str) {
                 RequestProto proto;
                 proto.ParseFromString(str);
-                return handler(std::move(proto)).map([=] (ResponseProto& proto) { return proto.SerializeAsString(); });
+                return handler(endp, std::move(proto)).map([=] (ResponseProto& proto) { return proto.SerializeAsString(); });
             });
     }
 
 private:
     Future<ErrorT<std::string>> send_raw(std::string serialized, int endpoint, uint64_t method, std::chrono::duration<double> timeout);
 
-    void register_raw_handler(uint32_t method, std::function<Future<std::string>(std::string)> handler);
+    void register_raw_handler(uint32_t method, std::function<Future<std::string>(int, std::string)> handler);
 
 private:
     class Impl;

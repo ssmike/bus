@@ -142,11 +142,11 @@ namespace bus {
         return promise.future();
     }
 
-    void ProtoBus::register_raw_handler(uint32_t method, std::function<Future<std::string>(std::string)> handler) {
+    void ProtoBus::register_raw_handler(uint32_t method, std::function<Future<std::string>(int, std::string)> handler) {
         impl_->handlers_.resize(std::max<uint32_t>(impl_->handlers_.size(), method + 1));
         impl_->handlers_[method] =
             [handler=std::move(handler), this, method] (int endpoint, uint32_t seq_id, std::string str) {
-                handler(std::move(str)).subscribe([=](std::string& str) {
+                handler(endpoint, std::move(str)).subscribe([=](std::string& str) {
                     bus::detail::Message header;
                     header.set_type(detail::Message::RESPONSE);
                     header.set_data(str);
