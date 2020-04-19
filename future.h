@@ -179,6 +179,8 @@ public:
     Future(const Future<T>&) = default;
     Future(Future<T>&&) = default;
 
+    Future() = default;
+
     T& get() {
         return state_->get();
     }
