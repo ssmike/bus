@@ -179,6 +179,7 @@ public:
     Future(const Future<T>&) = default;
     Future(Future<T>&&) = default;
 
+    Future<T>& operator = (const Future<T>&) = default;
     Future() = default;
 
     T& get() {
