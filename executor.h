@@ -88,6 +88,10 @@ public:
     {
     }
 
+    void delayed_start() {
+        schedule(std::bind(&PeriodicExecutor::execute, this), period_);
+    }
+
     void start() {
         schedule(std::bind(&PeriodicExecutor::execute, this), std::chrono::seconds::zero());
     }
