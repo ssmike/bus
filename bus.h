@@ -16,6 +16,7 @@ public:
         size_t fixed_pool_size = 6;
         size_t listener_backlog = 60;
         size_t max_message_size = 4098;
+        std::optional<size_t> max_pending_messages;
     };
 
     struct ConnHandle {
@@ -29,7 +30,8 @@ public:
 
     void start(std::function<void(ConnHandle, SharedView)>);
 
-    void send(int endpoint, SharedView);
+    void clear_queue(int endpoint);
+    bool send(int endpoint, SharedView);
     void answer(uint64_t conn_id, SharedView);
 
     // greeter interface

@@ -32,6 +32,7 @@ public:
         , buffer_pool_(buffer_pool)
         , endpoint_manager_(endpoint_manager)
         , max_message_size_(opts.max_message_size)
+        , max_pending_messages_(opts.max_pending_messages)
     {
         epollfd_ = epoll_create1(EPOLL_CLOEXEC);
         CHECK_ERRNO(epollfd_ >= 0);
@@ -280,7 +281,7 @@ public:
         }
     }
 
-    void send(int endpoint, SharedView message) {
+    bool send(int endpoint, SharedView message) {
         fix_pool_size(endpoint);
         std::shared_ptr<ConnData> available_connection;
         // serialize on messages to avoid double-writing message
@@ -292,7 +293,12 @@ public:
                 egress_data->message = std::move(message);
                 egress_data->offset = 0;
             } else {
-                (*messages)[endpoint].push(std::move(message));
+                auto& queue = (*messages)[endpoint];
+                if (!max_pending_messages_ || *max_pending_messages_ > queue.size()) {
+                    queue.push(std::move(message));
+                } else {
+                    return false;
+                }
             }
         }
 
@@ -300,6 +306,7 @@ public:
             auto egress_data = available_connection->egress_data.get();
             try_write_message(available_connection.get(), egress_data);
         }
+        return true;
     }
 
     uint64_t epoll_add(int fd, uint64_t id) {
@@ -333,6 +340,7 @@ public:
     EndpointManager& endpoint_manager_;
 
     const size_t max_message_size_;
+    const std::optional<size_t> max_pending_messages_;
 };
 
 TcpBus::TcpBus(Options opts, BufferPool& buffer_pool, EndpointManager& endpoint_manager)
@@ -344,11 +352,15 @@ void TcpBus::answer(uint64_t conn_id, SharedView buffer) {
     impl_->answer(conn_id, std::move(buffer));
 }
 
-void TcpBus::send(int endpoint, SharedView buffer) {
+bool TcpBus::send(int endpoint, SharedView buffer) {
     if (impl_->endpoint_manager_.transient(endpoint)) {
         throw BusError("bad endpoint");
     }
-    impl_->send(endpoint, std::move(buffer));
+    return impl_->send(endpoint, std::move(buffer));
+}
+
+void TcpBus::clear_queue(int endpoint) {
+    impl_->pending_messages_.get()->erase(endpoint);
 }
 
 void TcpBus::start(std::function<void(ConnHandle, SharedView)> handler) {
