@@ -23,7 +23,13 @@ public:
 public:
     EndpointManager();
 
-    int register_endpoint(std::string addr, int port);
+    int register_endpoint(std::string addr, int port) {
+        return add_address(addr, port, std::nullopt);
+    }
+
+    void merge_to_endpoint(std::string addr, int port, int merge_to) {
+        add_address(addr, port, merge_to);
+    }
 
     SocketHolder socket(int endpoint);
     void async_connect(SocketHolder& sock, int endpoint);
@@ -36,6 +42,9 @@ public:
     int resolve(int sock, int port);
 
     ~EndpointManager();
+
+private:
+    int add_address(std::string addr, int port, std::optional<int> merge_to);
 
 private:
     class Impl;

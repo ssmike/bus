@@ -87,7 +87,7 @@ public:
             if (resolve_map_.find(*addr) != resolve_map_.end()) {
                 return resolve_map_[*addr];
             }
-            int result = resolve_map_.size();
+            int result = endpoints_.size();
             resolve_map_[*addr] = result;
             if (result >= endpoints_.size()) {
                 endpoints_.resize(result + 1);
@@ -104,7 +104,7 @@ EndpointManager::EndpointManager()
 {
 }
 
-int EndpointManager::register_endpoint(std::string addr, int port) {
+int EndpointManager::add_address(std::string addr, int port, std::optional<int> merge_to) {
     struct addrinfo hints;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET6;
@@ -114,7 +114,7 @@ int EndpointManager::register_endpoint(std::string addr, int port) {
     if (res != 0) {
         throw BusError(gai_strerror(res));
     }
-    std::optional<int> result = std::nullopt;
+    std::optional<int> result = merge_to;
     auto state = impl_->state_.get();
     for (addrinfo* i = info; i != nullptr; i = i->ai_next) {
         if (info->ai_family == AF_INET6) {
@@ -122,6 +122,9 @@ int EndpointManager::register_endpoint(std::string addr, int port) {
             addr.sin6_port = htons(port);
             if (!result) {
                 result = state->resolve(&addr);
+            } else {
+                state->endpoints_.resize(std::max<size_t>(state->endpoints_.size(), *result + 1));
+                state->endpoints_[*result] = addr;
             }
             state->resolve_map_[addr] = result.value();
         }
