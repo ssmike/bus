@@ -109,6 +109,11 @@ namespace bus {
             return *value_;
         }
 
+        T& wait() {
+            evt_.wait();
+            return get();
+        }
+
     private:
         Event evt_;
         std::mutex mutex_;
@@ -184,6 +189,10 @@ public:
 
     T& get() {
         return state_->get();
+    }
+
+    T& wait() {
+        return state_->wait();
     }
 
     template<typename Func>
