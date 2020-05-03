@@ -96,9 +96,17 @@ public:
         schedule(std::bind(&PeriodicExecutor::execute, this), std::chrono::seconds::zero());
     }
 
+    void trigger() {
+        schedule(std::bind(&PeriodicExecutor::execute_once, this), std::chrono::seconds::zero());
+    }
+
 private:
     void execute() {
         schedule(std::bind(&PeriodicExecutor::execute, this), period_);
+        f_();
+    }
+
+    void execute_once() {
         f_();
     }
 
