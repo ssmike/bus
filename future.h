@@ -180,6 +180,9 @@ class Promise;
 template<typename T>
 class Future {
 public:
+    using Type = T;
+
+public:
     Future(std::shared_ptr<internal::FutureState<T>> state) : state_(std::move(state)) {}
     Future(const Future<T>&) = default;
     Future(Future<T>&&) = default;
@@ -219,6 +222,18 @@ public:
                 } catch(const std::exception& e) {
                     result.set_value_once(ErrorT<return_t>::error(e.what()));
                 }
+            });
+        return result.future();
+    }
+
+    template<typename Func>
+    Future<typename std::invoke_result_t<Func, T&>::Type> chain(Func f) {
+        using return_t = std::invoke_result_t<Func, T&>;
+        Promise<typename std::invoke_result_t<Func, T&>::Type> result;
+        state_->apply([f=std::move(f), result] (T& t) mutable {
+                f(t).subscribe([=] (auto& v) mutable {
+                        result.set_value_once(v);
+                    });
             });
         return result.future();
     }
