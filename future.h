@@ -257,6 +257,13 @@ public:
     Promise(const Promise<T>&) = default;
     Promise(Promise<T>&&) = default;
 
+    Promise<T>& operator = (Promise<T>&) = default;
+    Promise<T>& operator = (Promise<T>&&) = default;
+
+    void swap(Promise<T>& other) {
+        state_.swap(other.state_);
+    }
+
     template<typename... Args>
     void set_value(Args&&... args) {
         state_->set_value(/* check double-set */ false, std::forward<Args>(args)...);
