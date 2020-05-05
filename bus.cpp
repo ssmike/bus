@@ -153,14 +153,22 @@ public:
                     data->ingress_offset = 0;
                     continue;
                 }
+                // connection closed by remote peer
+                if (res == 0) {
+                    pool_.close(data->id);
+                    return;
+                }
+                // os buffer exhausted
+                if (res < expected) {
+                    return;
+                }
             } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                break;
+                return;
             } else if (errno == EINTR) {
                 continue;
             } else {
                 pool_.close(data->id);
-                data = nullptr;
-                break;
+                return;
             }
         }
     }
@@ -190,7 +198,7 @@ public:
         while (!to_break) {
             event_buf.resize(pool_.count_connections() + 1);
             int ready = epoll_wait(epollfd_, event_buf.data(), event_buf.size(), -1);
-            if (errno == EINTR) {
+            if (ready < 0 && errno == EINTR) {
                 continue;
             }
             CHECK_ERRNO(ready >= 0);
