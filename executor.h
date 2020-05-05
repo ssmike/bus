@@ -23,9 +23,7 @@ public:
     template<typename Duration>
     void schedule(std::function<void()> what, Duration when) {
         auto deadline = std::chrono::time_point_cast<std::chrono::system_clock::time_point::duration>(std::chrono::system_clock::now() + when);
-        auto actions = actions_.get();
-        actions->insert({ deadline, std::move(what) });
-        ready_.notify();
+        schedule_point(std::move(what), deadline);
     }
 
     void schedule_point(std::function<void()> what, std::chrono::time_point<std::chrono::system_clock> when) {
@@ -47,25 +45,30 @@ private:
         while (!shot_down_.load()) {
             std::optional<std::chrono::system_clock::time_point> wait_until;
 
-            if (auto actions = actions_.get(); !actions->empty()) {
+            std::vector<std::function<void()>> to_execute;
+            auto now = std::chrono::system_clock::now();
+            {
                 ready_.reset();
-                wait_until = actions->begin()->first;
-            }
-            if (!shot_down_.load()) {
-                if (wait_until) {
-                    if (!ready_.wait_until(*wait_until)) {
-                        std::function<void()> to_execute;
-                        if (auto actions = actions_.get(); !actions->empty()) {
-                            to_execute = std::move(actions->begin()->second);
-                            actions->erase(actions->begin());
-                        }
-                        if (to_execute) {
-                            to_execute();
-                        }
-                    }
-                } else {
-                    ready_.wait();
+                auto actions = actions_.get();
+                while (!actions->empty() && actions->begin()->first <= now) {
+                    to_execute.push_back(std::move(actions->begin()->second));
+                    actions->erase(actions->begin());
                 }
+                if (!actions->empty()) {
+                    wait_until = actions->begin()->first;
+                }
+            }
+            for (auto& action : to_execute) {
+                action();
+            }
+
+            if (shot_down_.load()) {
+                break;
+            }
+            if (wait_until) {
+                ready_.wait_until(*wait_until);
+            } else {
+                ready_.wait();
             }
         }
         shot_down_event_.notify();
