@@ -80,6 +80,7 @@ public:
     std::shared_ptr<ConnData> take_available(int endpoint);
 
     void set_available(uint64_t);
+    void set_unavailable(uint64_t);
 
     size_t count_connections(int endpoint);
     size_t count_connections();

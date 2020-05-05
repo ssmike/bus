@@ -221,6 +221,7 @@ public:
                         handle_read(data.get());
                     }
                     if (data && (event_buf[i].events & EPOLLOUT) != 0) {
+                        pool_.set_unavailable(id);
                         handle_write(data.get());
                     }
                 }
@@ -292,27 +293,20 @@ public:
     bool send(int endpoint, SharedView message) {
         fix_pool_size(endpoint);
         std::shared_ptr<ConnData> available_connection;
-        // serialize on messages to avoid double-writing message
-        {
-            auto messages = pending_messages_.get();
-            available_connection = pool_.take_available(endpoint);
-            if (available_connection) {
-                auto egress_data = available_connection->egress_data.get();
-                egress_data->message = std::move(message);
-                egress_data->offset = 0;
-            } else {
-                auto& queue = (*messages)[endpoint];
-                if (!max_pending_messages_ || *max_pending_messages_ > queue.size()) {
-                    queue.push(std::move(message));
-                } else {
-                    return false;
-                }
-            }
-        }
 
-        if (available_connection) {
+        if (auto available_connection = pool_.take_available(endpoint)) {
             auto egress_data = available_connection->egress_data.get();
+            egress_data->message = std::move(message);
+            egress_data->offset = 0;
             try_write_message(available_connection.get(), egress_data);
+        } else {
+            auto messages = pending_messages_.get();
+            auto& queue = (*messages)[endpoint];
+            if (!max_pending_messages_ || *max_pending_messages_ > queue.size()) {
+                queue.push(std::move(message));
+            } else {
+                return false;
+            }
         }
         return true;
     }

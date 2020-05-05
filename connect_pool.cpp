@@ -134,6 +134,17 @@ void ConnectPool::set_available(uint64_t id) {
     }
 }
 
+void ConnectPool::set_unavailable(uint64_t id) {
+    auto impl = impl_.get();
+    if (auto data = impl->select(id)) {
+        data->available_ = true;
+        auto& d_list = impl->by_endpoint_[data->endpoint];
+        auto it = d_list.insert(d_list.end(), id);
+        d_list.erase(data->by_endpoint_pos_);
+        data->by_endpoint_pos_ = it;
+    }
+}
+
 size_t ConnectPool::count_connections(int endpoint) {
     auto impl = impl_.get();
     return impl->by_endpoint_[endpoint].size();
