@@ -133,10 +133,10 @@ namespace bus {
         Promise<ErrorT<std::string>> promise;
         impl_->sent_requests_.get()->insert({ seq_id, promise });
         impl_->exc_.schedule([=] () mutable {
-                auto requests = impl_->sent_requests_.get();
-                if (requests->find(seq_id) != requests->end()) {
-                    promise.set_value(ErrorT<std::string>::error("timeout exceeded"));
+                if (auto requests = impl_->sent_requests_.get(); requests->find(seq_id) == requests->end()) {
+                    return;
                 }
+                promise.set_value(ErrorT<std::string>::error("timeout exceeded"));
             },
             timeout);
         return promise.future();
