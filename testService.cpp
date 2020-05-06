@@ -25,13 +25,13 @@ public:
     void execute(int endpoint) {
         Operation op;
         op.set_key("key");
-        op.set_data("value");
+        op.set_value("value");
 
         send<Operation, Operation>(op, endpoint, 1, std::chrono::seconds(4))
             .subscribe([=](ErrorT<Operation>& op) {
                     assert(op);
                     assert(op.unwrap().key() == "key - mirrored");
-                    assert(op.unwrap().data() == "value");
+                    assert(op.unwrap().value() == "value");
                     std::cerr << "OK" << std::endl;
                     event.notify();
                 });

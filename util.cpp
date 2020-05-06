@@ -12,7 +12,7 @@ void write_header(size_t size, char* buf) {
 size_t read_header(char* buf) {
     size_t result = 0;
     for (ssize_t i = header_len - 1; i >= 0; --i) {
-        result = result * 256 + size_t(buf[i]);
+        result = result * 256 + static_cast<unsigned char>(buf[i]);
     }
     return result;
 }

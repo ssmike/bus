@@ -14,6 +14,14 @@ int main() {
 
     constexpr size_t messages_count = 4000;
 
+    std::string key = "key";
+    std::string value = "value";
+
+    for (size_t i = 0; i < 110; ++i) {
+        key += "1";
+        value += "1";
+    }
+
     std::thread t([&] {
         BufferPool bufferPool{4098};
         EndpointManager manager;
@@ -24,9 +32,8 @@ int main() {
         first.start([&](auto endp, SharedView view) {
                 Operation op2;
                 op2.ParseFromArray(view.data(), view.size());
-                assert(op2.key() == "key");
-                assert(op2.data() == "data");
-
+                assert(op2.key() == key);
+                assert(op2.value() == value);
                 if ((++messages_received) == messages_count) {
                     exit(0);
                 }
@@ -38,8 +45,8 @@ int main() {
     int endpoint = manager.register_endpoint("::1", 4001);
     for (size_t i = 0; i < messages_count; ++i) {
         Operation op;
-        op.set_data("data");
-        op.set_key("key");
+        op.set_value(value);
+        op.set_key(key);
 
         SharedView buffer{bufferPool, op.ByteSizeLong()};
         op.SerializeToArray(buffer.data(), buffer.size());
