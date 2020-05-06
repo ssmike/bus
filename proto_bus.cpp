@@ -56,11 +56,17 @@ namespace bus {
                         }
                     }
                     if (header.type() == detail::Message::RESPONSE) {
-                        auto reqs = sent_requests_.get();
-                        auto it = reqs->find(header.seq_id());
-                        if (it != reqs->end()) {
-                            it->second.set_value(ErrorT<std::string>::value(std::move(*header.mutable_data())));
-                            reqs->erase(it);
+                        std::optional<Promise<ErrorT<std::string>>> to_deliver;
+                        {
+                            auto reqs = sent_requests_.get();
+                            auto it = reqs->find(header.seq_id());
+                            if (it != reqs->end()) {
+                                to_deliver = it->second;
+                                reqs->erase(it);
+                            }
+                        }
+                        if (to_deliver) {
+                            to_deliver->set_value(ErrorT<std::string>::value(std::move(*header.mutable_data())));
                         }
                     }
                 }
