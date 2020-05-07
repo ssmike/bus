@@ -25,6 +25,8 @@ public:
     ProtoBus(Options opts, EndpointManager& manager);
     ~ProtoBus();
 
+    void start();
+
     template<typename RequestProto, typename ResponseProto>
     Future<ErrorT<ResponseProto>> send(RequestProto proto, int endpoint, uint64_t method, std::chrono::duration<double> timeout) {
         return send_raw(proto.SerializeAsString(), endpoint, method, timeout).map(

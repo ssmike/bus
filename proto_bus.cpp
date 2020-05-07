@@ -25,6 +25,9 @@ namespace bus {
                     greeter.SerializeToArray(result.data(), result.size());
                     return result;
                 });
+        }
+
+        void start() {
             bus_.start([=](auto d, auto v) { this->handle(d, v); });
             loop_.start();
             exc_.schedule([=] { timed_flush_batch(); }, batch_opts_.max_delay);
@@ -166,6 +169,10 @@ namespace bus {
     ProtoBus::ProtoBus(Options opts, EndpointManager& manager)
         : impl_(new Impl(opts, manager))
     {
+    }
+
+    void ProtoBus::start() {
+        impl_->start();
     }
 
     ProtoBus::~ProtoBus() {

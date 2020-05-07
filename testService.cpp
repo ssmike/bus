@@ -20,6 +20,8 @@ public:
                 return make_future(std::move(op));
             });
         }
+
+        ProtoBus::start();
     }
 
     void execute(int endpoint) {
