@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.5.1)
 
 project(bus)
+enable_testing()
 
 find_package(Protobuf REQUIRED)
 include_directories(${Protobuf_INCLUDE_DIRS})
