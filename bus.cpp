@@ -292,23 +292,25 @@ public:
 
     bool send(int endpoint, SharedView message) {
         fix_pool_size(endpoint);
-        std::shared_ptr<ConnData> available_connection;
-
-        if (auto available_connection = pool_.take_available(endpoint)) {
-            auto egress_data = available_connection->egress_data.get();
-            egress_data->message = std::move(message);
-            egress_data->offset = 0;
-            try_write_message(available_connection.get(), egress_data);
-        } else {
+        auto available_connection = pool_.take_available(endpoint);
+        if (available_connection) {
+            if (auto egress_data = available_connection->egress_data.try_get()) {
+                egress_data->message = std::move(message);
+                egress_data->offset = 0;
+                try_write_message(available_connection.get(), egress_data);
+                return true;
+            }
+        }
+        {
             auto messages = pending_messages_.get();
             auto& queue = (*messages)[endpoint];
             if (!max_pending_messages_ || *max_pending_messages_ > queue.size()) {
                 queue.push(std::move(message));
+                return true;
             } else {
                 return false;
             }
         }
-        return true;
     }
 
     uint64_t epoll_add(int fd, uint64_t id) {

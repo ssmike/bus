@@ -2,13 +2,14 @@
 
 #include <mutex>
 #include <memory>
+#include <optional>
 
 namespace bus::internal {
 
-template<typename T>
+template<typename T, typename Lock=std::mutex>
 class ExclusiveGuard {
 public:
-    ExclusiveGuard(T& value, std::unique_lock<std::mutex> lock)
+    ExclusiveGuard(T& value, std::unique_lock<Lock> lock)
         : value_(value)
         , lock_(std::move(lock))
     {
@@ -30,9 +31,17 @@ public:
         return &value_;
     }
 
+    operator bool () const {
+        return lock_.owns_lock();
+    }
+
+    void unlock() {
+        lock_.unlock();
+    }
+
 private:
     T& value_;
-    std::unique_lock<std::mutex> lock_;
+    std::unique_lock<Lock> lock_;
 };
 
 template<typename T>
@@ -65,10 +74,8 @@ private:
     std::unique_lock<std::mutex> lock_;
 };
 
-template<typename T>
+template<typename T, typename Lock=std::mutex>
 class ExclusiveWrapper {
-public:
-
 public:
     template<typename... Args>
     ExclusiveWrapper(Args&&... args)
@@ -76,13 +83,17 @@ public:
     {
     }
 
-    ExclusiveGuard<T> get() {
+    ExclusiveGuard<T, Lock> get() {
         return ExclusiveGuard(value_, std::unique_lock(mutex_));
+    }
+
+    ExclusiveGuard<T, Lock> try_get() {
+        return ExclusiveGuard(value_, std::unique_lock(mutex_, std::try_to_lock));
     }
 
 private:
     T value_;
-    std::mutex mutex_;
+    Lock mutex_;
 };
 
 }
