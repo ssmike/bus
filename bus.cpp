@@ -4,6 +4,8 @@
 
 #include "error.h"
 
+#include <assert.h>
+
 #include <sys/uio.h>
 #include <string.h>
 #include <netdb.h>
@@ -210,7 +212,7 @@ public:
                     to_break = true;
                 } else if (id == listen_id_) {
                     accept_conns();
-                } else if (auto data = pool_.select(id)) {
+                } else if (auto data = pool_.select_unavailable(id)) {
                     int endpoint = data->endpoint;
                     if (event_buf[i].events & EPOLLERR) {
                         pool_.close(id);
@@ -221,9 +223,9 @@ public:
                         handle_read(data.get());
                     }
                     if (data && (event_buf[i].events & EPOLLOUT) != 0) {
-                        pool_.set_unavailable(id);
                         handle_write(data.get());
                     }
+                    pool_.set_available(data->id);
                 }
             }
         }
@@ -264,7 +266,6 @@ public:
                 egress_data->offset += res;
                 if (egress_data->offset == internal::header_len + egress_data->message->size()) {
                     egress_data->message.reset();
-                    pool_.set_available(data->id);
                 }
                 return true;
             } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -294,12 +295,12 @@ public:
         fix_pool_size(endpoint);
         auto available_connection = pool_.take_available(endpoint);
         if (available_connection) {
-            if (auto egress_data = available_connection->egress_data.try_get()) {
-                egress_data->message = std::move(message);
-                egress_data->offset = 0;
-                try_write_message(available_connection.get(), egress_data);
-                return true;
-            }
+            auto egress_data = available_connection->egress_data.get();
+            assert(!egress_data->message);
+            egress_data->message = std::move(message);
+            egress_data->offset = 0;
+            try_write_message(available_connection.get(), egress_data);
+            return true;
         }
         {
             auto messages = pending_messages_.get();

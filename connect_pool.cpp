@@ -40,6 +40,16 @@ public:
         }
     }
 
+    void set_unavailable(uint64_t id) {
+        if (auto data = select(id)) {
+            data->available_ = true;
+            auto& d_list = by_endpoint_[data->endpoint];
+            auto it = d_list.insert(d_list.end(), id);
+            d_list.erase(data->by_endpoint_pos_);
+            data->by_endpoint_pos_ = it;
+        }
+    }
+
 public:
     std::unordered_map<uint64_t, std::shared_ptr<PoolItem>> by_id_;
     std::unordered_map<int, std::list<uint64_t>> by_endpoint_;
@@ -86,6 +96,15 @@ std::shared_ptr<ConnData> ConnectPool::select(uint64_t id) {
     return data;
 }
 
+std::shared_ptr<ConnData> ConnectPool::select_unavailable(uint64_t id) {
+    auto impl = impl_.get();
+    auto data = impl->select(id);
+    impl->by_usage_.erase(data->usage_list_pos_);
+    data->usage_list_pos_ = impl->by_usage_.insert(impl->by_usage_.begin(), id);
+    impl->set_unavailable(id);
+    return data;
+}
+
 void ConnectPool::rebind(uint64_t id, int endpoint) {
     auto impl = impl_.get();
     auto data = impl->select(id);
@@ -129,17 +148,6 @@ void ConnectPool::set_available(uint64_t id) {
         data->available_ = true;
         auto& d_list = impl->by_endpoint_[data->endpoint];
         auto it = d_list.insert(d_list.begin(), id);
-        d_list.erase(data->by_endpoint_pos_);
-        data->by_endpoint_pos_ = it;
-    }
-}
-
-void ConnectPool::set_unavailable(uint64_t id) {
-    auto impl = impl_.get();
-    if (auto data = impl->select(id)) {
-        data->available_ = true;
-        auto& d_list = impl->by_endpoint_[data->endpoint];
-        auto it = d_list.insert(d_list.end(), id);
         d_list.erase(data->by_endpoint_pos_);
         data->by_endpoint_pos_ = it;
     }
