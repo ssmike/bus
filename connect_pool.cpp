@@ -96,15 +96,6 @@ std::shared_ptr<ConnData> ConnectPool::select(uint64_t id) {
     return data;
 }
 
-std::shared_ptr<ConnData> ConnectPool::select_unavailable(uint64_t id) {
-    auto impl = impl_.get();
-    auto data = impl->select(id);
-    impl->by_usage_.erase(data->usage_list_pos_);
-    data->usage_list_pos_ = impl->by_usage_.insert(impl->by_usage_.begin(), id);
-    impl->set_unavailable(id);
-    return data;
-}
-
 void ConnectPool::rebind(uint64_t id, int endpoint) {
     auto impl = impl_.get();
     auto data = impl->select(id);

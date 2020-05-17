@@ -212,7 +212,7 @@ public:
                     to_break = true;
                 } else if (id == listen_id_) {
                     accept_conns();
-                } else if (auto data = pool_.select_unavailable(id)) {
+                } else if (auto data = pool_.select(id)) {
                     int endpoint = data->endpoint;
                     if (event_buf[i].events & EPOLLERR) {
                         pool_.close(id);
@@ -225,7 +225,6 @@ public:
                     if (data && (event_buf[i].events & EPOLLOUT) != 0) {
                         handle_write(data.get());
                     }
-                    pool_.set_available(data->id);
                 }
             }
         }
@@ -293,25 +292,19 @@ public:
 
     bool send(int endpoint, SharedView message) {
         fix_pool_size(endpoint);
-        auto available_connection = pool_.take_available(endpoint);
-        if (available_connection) {
-            auto egress_data = available_connection->egress_data.get();
-            assert(!egress_data->message);
-            egress_data->message = std::move(message);
-            egress_data->offset = 0;
-            try_write_message(available_connection.get(), egress_data);
-            return true;
-        }
         {
             auto messages = pending_messages_.get();
             auto& queue = (*messages)[endpoint];
             if (!max_pending_messages_ || *max_pending_messages_ > queue.size()) {
                 queue.push(std::move(message));
-                return true;
             } else {
                 return false;
             }
         }
+        if (auto available_connection = pool_.take_available(endpoint)) {
+            handle_write(available_connection.get());
+        }
+        return true;
     }
 
     uint64_t epoll_add(int fd, uint64_t id) {

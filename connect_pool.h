@@ -76,9 +76,6 @@ public:
 
     std::shared_ptr<ConnData> select(uint64_t);
 
-    //makes unavailable
-    std::shared_ptr<ConnData> select_unavailable(uint64_t);
-
     // makes unavailable
     std::shared_ptr<ConnData> take_available(int endpoint);
 
