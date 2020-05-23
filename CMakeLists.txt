@@ -24,6 +24,10 @@ add_library(bus
     util.h util.cpp
     ${LIB_PROTO_HDRS} ${LIB_PROTO_SRCS})
 
+# old cmake
+find_package(Threads::Threads QUIET)
+target_link_libraries(bus PUBLIC Threads::Threads)
+
 add_executable(testBus testBus.cpp
     ${PROTO_SRCS}
     ${PROTO_HDRS})
