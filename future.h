@@ -91,7 +91,7 @@ namespace bus {
                 std::unique_lock<std::mutex> lock(mutex_);
                 if (value_) {
                     lock.unlock();
-                    f(get());
+                    f(*value_);
                 } else {
                     callbacks_.push_back(std::move(f));
                 }
