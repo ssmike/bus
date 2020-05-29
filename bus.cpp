@@ -177,7 +177,10 @@ public:
 
     void handle_write(ConnData* data) {
         while (1) {
-            auto egress_data = data->egress_data.get();
+            auto egress_data = data->egress_data.try_get();
+            if (!egress_data) {
+                return;
+            }
             if (!egress_data->message) {
                 auto messages = pending_messages_.get();
                 auto& queue = (*messages)[data->endpoint];
