@@ -82,30 +82,40 @@ private:
     std::thread thread_;
 };
 
-class PeriodicExecutor : DelayedExecutor {
+class PeriodicExecutor {
 public:
     template<typename Duration>
     PeriodicExecutor(std::function<void()> f, Duration period)
         : f_(std::move(f))
         , period_(std::chrono::duration_cast<decltype(period_)>(period))
     {
+        executor_holder_ = std::make_unique<DelayedExecutor>();
+        backend_ = executor_holder_.get();
+    }
+
+    template<typename Duration>
+    PeriodicExecutor(std::function<void()> f, Duration period, DelayedExecutor& executor)
+        : f_(std::move(f))
+        , period_(std::chrono::duration_cast<decltype(period_)>(period))
+    {
+        backend_ = &executor;
     }
 
     void delayed_start() {
-        schedule(std::bind(&PeriodicExecutor::execute, this), period_);
+        backend_->schedule(std::bind(&PeriodicExecutor::execute, this), period_);
     }
 
     void start() {
-        schedule(std::bind(&PeriodicExecutor::execute, this), std::chrono::seconds::zero());
+        backend_->schedule(std::bind(&PeriodicExecutor::execute, this), std::chrono::seconds::zero());
     }
 
     void trigger() {
-        schedule(std::bind(&PeriodicExecutor::execute_once, this), std::chrono::seconds::zero());
+        backend_->schedule(std::bind(&PeriodicExecutor::execute_once, this), std::chrono::seconds::zero());
     }
 
 private:
     void execute() {
-        schedule(std::bind(&PeriodicExecutor::execute, this), period_);
+        backend_->schedule(std::bind(&PeriodicExecutor::execute, this), period_);
         f_();
     }
 
@@ -116,6 +126,9 @@ private:
 private:
     std::function<void()> f_;
     std::chrono::system_clock::duration period_;
+
+    DelayedExecutor* backend_;
+    std::unique_ptr<DelayedExecutor> executor_holder_;
 };
 
 }
