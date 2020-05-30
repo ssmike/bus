@@ -44,8 +44,8 @@ private:
     std::unique_lock<Lock> lock_;
 };
 
-template<typename T>
-class ExclusiveGuard<std::unique_ptr<T>> {
+template<typename T, typename Lock>
+class ExclusiveGuard<std::unique_ptr<T>, Lock> {
 public:
     ExclusiveGuard(std::unique_ptr<T>& value, std::unique_lock<std::mutex> lock)
         : value_(*value)
@@ -71,7 +71,7 @@ public:
 
 private:
     T& value_;
-    std::unique_lock<std::mutex> lock_;
+    std::unique_lock<Lock> lock_;
 };
 
 template<typename T, typename Lock=std::mutex>
