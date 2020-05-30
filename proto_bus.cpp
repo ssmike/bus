@@ -1,5 +1,5 @@
 #include "proto_bus.h"
-#include "executor.h"
+#include "delayed_executor.h"
 
 #include "service.pb.h"
 
@@ -11,7 +11,9 @@ namespace bus {
             , endpoint_manager_(manager)
             , pool_{ 2 * opts.tcp_opts.max_message_size }
             , bus_(opts.tcp_opts, pool_, manager)
+            , exc_(bus_)
             , batch_opts_(opts.batch_opts)
+            , flusher_([&]{ timed_flush_batch(); }, opts.batch_opts.max_delay, bus_)
             , loop_([&] { bus_.loop(); }, std::chrono::seconds::zero())
         {
             bus_.set_greeter([=] (int endpoint) {
@@ -30,7 +32,7 @@ namespace bus {
         void start() {
             bus_.start([=](auto d, auto v) { this->handle(d, v); });
             loop_.start();
-            exc_.schedule([=] { timed_flush_batch(); }, batch_opts_.max_delay);
+            flusher_.delayed_start();
         }
 
         void handle(TcpBus::ConnHandle handle, SharedView view) {
@@ -76,13 +78,13 @@ namespace bus {
             }
         }
 
-        void flush_batch(int endpoint, detail::MessageBatch batch) {
+        bool flush_batch(int endpoint, detail::MessageBatch batch) {
             if (!batch.item_size()) {
-                return;
+                return true;
             }
             auto buffer = SharedView(pool_, batch.ByteSizeLong());
             batch.SerializeToArray(buffer.data(), buffer.size());
-            bus_.send(endpoint, std::move(buffer));
+            return bus_.send(endpoint, std::move(buffer));
         }
 
         void timed_flush_batch() {
@@ -94,7 +96,7 @@ namespace bus {
             }
         }
 
-        void send_item(int endpoint, detail::Message item) {
+        bool send_item(int endpoint, detail::Message item) {
             std::optional<detail::MessageBatch> to_flush;
             {
                 auto accumulated = accumulated_.get();
@@ -108,8 +110,9 @@ namespace bus {
                 }
             }
             if (to_flush.has_value()) {
-                flush_batch(endpoint, std::move(to_flush.value()));
+                return flush_batch(endpoint, std::move(to_flush.value()));
             }
+            return true;
         }
 
     public:
@@ -119,7 +122,7 @@ namespace bus {
         BufferPool pool_;
         TcpBus bus_;
         std::vector<std::function<void(int, uint32_t, std::string)>> handlers_;
-        internal::DelayedExecutor exc_;
+        bus::Executor& exc_; 
 
         internal::ExclusiveWrapper<std::unordered_map<int, detail::MessageBatch>> accumulated_;
 
@@ -127,6 +130,7 @@ namespace bus {
         std::atomic<uint64_t> seq_id_ = 0;
 
         BatchOptions batch_opts_;
+        internal::PeriodicExecutor flusher_;
         internal::PeriodicExecutor loop_;
     };
 
@@ -137,7 +141,9 @@ namespace bus {
         header.set_type(detail::Message::REQUEST);
         header.set_data(std::move(serialized));
         header.set_method(method);
-        impl_->send_item(endpoint, std::move(header));
+        if (!impl_->send_item(endpoint, std::move(header))) {
+            return bus::make_future(ErrorT<std::string>::error("too many pending messages"));
+        }
 
         Promise<ErrorT<std::string>> promise;
         impl_->sent_requests_.get()->insert({ seq_id, promise });
@@ -177,6 +183,10 @@ namespace bus {
 
     ProtoBus::~ProtoBus() {
         impl_->bus_.to_break();
+    }
+
+    Executor& ProtoBus::executor() {
+        return impl_->bus_;
     }
 
 }

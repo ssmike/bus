@@ -1,6 +1,7 @@
 #include "bus.h"
 #include "util.h"
 #include "lock.h"
+#include "action_map.h"
 
 #include "error.h"
 
@@ -13,6 +14,7 @@
 #include <sys/socket.h>
 #include <sys/eventfd.h>
 #include <sys/epoll.h>
+#include <sys/timerfd.h>
 #include <netinet/tcp.h>
 #include <unistd.h>
 
@@ -40,15 +42,23 @@ public:
         CHECK_ERRNO(epollfd_ >= 0);
         breakfd_ = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
         CHECK_ERRNO(breakfd_ >= 0);
-
-        {
-            epoll_event evt;
-            evt.events = EPOLLIN;
-            evt.data.u64 = break_id_ = pool_.make_id();
-            CHECK_ERRNO(epoll_ctl(epollfd_, EPOLL_CTL_ADD, breakfd_, &evt) == 0);
-        }
+        timerctlfd_ = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+        CHECK_ERRNO(timerctlfd_ >= 0);
+        timerfd_ = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
+        CHECK_ERRNO(timerfd_ >= 0);
 
         listen_id_ = pool_.make_id();
+
+        auto add_lt = [&] (int fd, size_t& id) {
+            epoll_event evt;
+            evt.events = EPOLLIN;
+            evt.data.u64 = id = pool_.make_id();
+            CHECK_ERRNO(epoll_ctl(epollfd_, EPOLL_CTL_ADD, fd, &evt) == 0);
+        };
+
+        add_lt(breakfd_, break_id_);
+        add_lt(timerfd_, timer_id_);
+        add_lt(timerctlfd_, timerctl_id_);
     }
 
     void start(std::function<void(ConnHandle, SharedView)> handler) {
@@ -197,11 +207,35 @@ public:
         }
     }
 
+    void rearm_timer() {
+        while (true) {
+            auto mp = action_map_.get();
+            auto next = mp->next_time_point();
+            if (!next) return;
+            auto now = std::chrono::system_clock::now();
+            auto interval = *next - now;
+            auto secs = std::chrono::duration_cast<std::chrono::seconds>(interval);
+            auto nsecs = std::chrono::duration_cast<std::chrono::nanoseconds>(interval - secs);
+            if (nsecs.count() < 1) {
+                auto action = mp->pick_action();
+                mp.unlock();
+                assert(action);
+                action();
+            } else {
+                itimerspec spec;
+                spec.it_interval = { 0, 0 };
+                spec.it_value = { secs.count(), nsecs.count() };
+                timerfd_settime(timerfd_, 0, &spec, nullptr);
+                return;
+            }
+        }
+    }
+
     void loop() {
         std::vector<epoll_event> event_buf;
         bool to_break = false;
         while (!to_break) {
-            event_buf.resize(pool_.count_connections() + 1);
+            event_buf.resize(pool_.count_connections() + 10);
             int ready = epoll_wait(epollfd_, event_buf.data(), event_buf.size(), -1);
             if (ready < 0 && errno == EINTR) {
                 continue;
@@ -209,9 +243,18 @@ public:
             CHECK_ERRNO(ready >= 0);
             for (size_t i = 0; i < ready; ++i) {
                 uint64_t id = event_buf[i].data.u64;
-                if (id == break_id_) {
+                auto read_uint64 = [] (int fd) {
                     uint64_t val;
-                    CHECK_ERRNO(read(breakfd_, &val, sizeof(val)) == sizeof(val));
+                    CHECK_ERRNO(read(fd, &val, sizeof(val)) == sizeof(val));
+                };
+                if (id == timerctl_id_) {
+                    read_uint64(timerctlfd_);
+                    rearm_timer();
+                } else if (id == timer_id_) {
+                    read_uint64(timerfd_);
+                    rearm_timer();
+                } else if (id == break_id_) {
+                    read_uint64(breakfd_);
                     to_break = true;
                 } else if (id == listen_id_) {
                     accept_conns();
@@ -325,9 +368,13 @@ public:
     int epollfd_;
     int listensock_;
     int breakfd_;
+    int timerfd_;
+    int timerctlfd_;
 
     size_t break_id_;
     size_t listen_id_;
+    size_t timer_id_;
+    size_t timerctl_id_;
 
     const int port_;
     const size_t listener_backlog_;
@@ -342,6 +389,8 @@ public:
 
     const size_t max_message_size_;
     const std::optional<size_t> max_pending_messages_;
+
+    bus::internal::ExclusiveWrapper<bus::internal::ActionMap, std::recursive_mutex> action_map_;
 };
 
 TcpBus::TcpBus(Options opts, BufferPool& buffer_pool, EndpointManager& endpoint_manager)
@@ -387,6 +436,13 @@ void TcpBus::loop() {
 void TcpBus::to_break() {
     uint64_t val = 1;
     CHECK_ERRNO(write(impl_->breakfd_, &val, sizeof(val)) == sizeof(val));
+}
+
+void TcpBus::schedule_point(std::function<void()> what, std::chrono::time_point<std::chrono::system_clock> when) {
+    auto now = std::chrono::system_clock::now();
+    impl_->action_map_.get()->insert(when, std::move(what));
+    uint64_t val = 1;
+    CHECK_ERRNO(write(impl_->timerctlfd_, &val, sizeof(val)) == sizeof(val));
 }
 
 TcpBus::~TcpBus() = default;

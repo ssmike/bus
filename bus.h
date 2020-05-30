@@ -3,13 +3,14 @@
 #include "buffer.h"
 #include "endpoint_manager.h"
 #include "fwd.h"
+#include "executor.h"
 
 #include <functional>
 #include <memory>
 
 namespace bus {
 
-class TcpBus {
+class TcpBus : public Executor {
 public:
     struct Options {
         int port = 80;
@@ -41,6 +42,8 @@ public:
 
     void loop();
     void to_break();
+
+    void schedule_point(std::function<void()> what, std::chrono::time_point<std::chrono::system_clock> when) override;
 
     ~TcpBus();
 

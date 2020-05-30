@@ -41,6 +41,8 @@ public:
             });
     }
 
+    Executor& executor();
+
 protected:
     template<typename RequestProto, typename ResponseProto>
     void register_handler(uint32_t method, std::function<Future<ResponseProto>(int, RequestProto)> handler) {
