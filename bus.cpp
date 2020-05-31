@@ -245,7 +245,7 @@ public:
                 uint64_t id = event_buf[i].data.u64;
                 auto read_uint64 = [] (int fd) {
                     uint64_t val;
-                    CHECK_ERRNO(read(fd, &val, sizeof(val)) == sizeof(val));
+                    return read(fd, &val, sizeof(val)) == sizeof(val);
                 };
                 if (id == timerctl_id_) {
                     read_uint64(timerctlfd_);
@@ -254,7 +254,7 @@ public:
                     read_uint64(timerfd_);
                     rearm_timer();
                 } else if (id == break_id_) {
-                    read_uint64(breakfd_);
+                    CHECK_ERRNO(read_uint64(breakfd_));
                     to_break = true;
                 } else if (id == listen_id_) {
                     accept_conns();
