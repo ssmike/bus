@@ -1,10 +1,34 @@
 #pragma once
 
+#include <atomic>
 #include <mutex>
 #include <memory>
 #include <optional>
 
 namespace bus::internal {
+
+class SpinLock {
+public:
+    SpinLock() = default;
+    SpinLock(const SpinLock&) = delete;
+
+    void lock() {
+        while (!try_lock()) {
+            ;
+        }
+    }
+
+    bool try_lock() {
+        return acquired.exchange(true, std::memory_order_acquire);
+    }
+
+    void unlock() {
+        acquired.store(false, std::memory_order_release);
+    }
+
+private:
+    std::atomic_bool acquired = false;
+};
 
 template<typename T, typename Lock=std::mutex>
 class ExclusiveGuard {
