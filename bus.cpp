@@ -276,7 +276,8 @@ public:
         }
     }
 
-    bool try_write_message(ConnData* data, internal::ExclusiveGuard<ConnData::EgressData>& egress_data) {
+    template<typename Lock>
+    bool try_write_message(ConnData* data, internal::ExclusiveGuard<ConnData::EgressData, Lock>& egress_data) {
         if (!egress_data->message) {
             return true;
         }

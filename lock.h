@@ -30,7 +30,7 @@ private:
     std::atomic_bool acquired = false;
 };
 
-template<typename T, typename Lock=std::mutex>
+template<typename T, typename Lock>
 class ExclusiveGuard {
 public:
     ExclusiveGuard(T& value, std::unique_lock<Lock> lock)
@@ -71,7 +71,7 @@ private:
 template<typename T, typename Lock>
 class ExclusiveGuard<std::unique_ptr<T>, Lock> {
 public:
-    ExclusiveGuard(std::unique_ptr<T>& value, std::unique_lock<std::mutex> lock)
+    ExclusiveGuard(std::unique_ptr<T>& value, std::unique_lock<Lock> lock)
         : value_(*value)
         , lock_(std::move(lock))
     {
