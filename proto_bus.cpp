@@ -134,7 +134,7 @@ namespace bus {
         internal::PeriodicExecutor loop_;
     };
 
-    Future<ErrorT<std::string>> ProtoBus::send_raw(std::string serialized, int endpoint, uint64_t method, std::chrono::duration<double> timeout) {
+    Future<ErrorT<std::string>> ProtoBus::send_raw(std::string serialized, int endpoint, uint64_t method, std::optional<std::chrono::duration<double>> timeout) {
         detail::Message header;
         uint64_t seq_id = impl_->seq_id_.fetch_add(1);
         header.set_seq_id(seq_id);
@@ -147,13 +147,15 @@ namespace bus {
 
         Promise<ErrorT<std::string>> promise;
         impl_->sent_requests_.get()->insert({ seq_id, promise });
-        impl_->exc_.schedule([=] () mutable {
-                if (auto requests = impl_->sent_requests_.get(); requests->find(seq_id) == requests->end()) {
-                    return;
-                }
-                promise.set_value(ErrorT<std::string>::error("timeout exceeded"));
-            },
-            timeout);
+        if (timeout) {
+            impl_->exc_.schedule([=] () mutable {
+                    if (auto requests = impl_->sent_requests_.get(); requests->find(seq_id) == requests->end()) {
+                        return;
+                    }
+                    promise.set_value(ErrorT<std::string>::error("timeout exceeded"));
+                },
+                timeout);
+        }
         return promise.future();
     }
 
