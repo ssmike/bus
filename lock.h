@@ -19,7 +19,7 @@ public:
     }
 
     bool try_lock() {
-        return acquired.exchange(true, std::memory_order_acquire);
+        return !acquired.exchange(true, std::memory_order_acquire);
     }
 
     void unlock() {
