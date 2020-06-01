@@ -154,7 +154,7 @@ namespace bus {
                     }
                     promise.set_value(ErrorT<std::string>::error("timeout exceeded"));
                 },
-                timeout);
+                *timeout);
         }
         return promise.future();
     }
