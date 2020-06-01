@@ -236,7 +236,8 @@ public:
         bool to_break = false;
         while (!to_break) {
             event_buf.resize(pool_.count_connections() + 10);
-            int ready = epoll_wait(epollfd_, event_buf.data(), event_buf.size(), -1);
+            bool to_spin = action_map_.get()->next_time_point().value_or(std::chrono::system_clock::time_point::max()) < std::chrono::system_clock::now() + kSpinThreshold;
+            int ready = epoll_wait(epollfd_, event_buf.data(), event_buf.size(), to_spin ? 0 : -1);
             if (ready < 0 && errno == EINTR) {
                 continue;
             }
@@ -271,6 +272,13 @@ public:
                     if (data && (event_buf[i].events & EPOLLOUT) != 0) {
                         handle_write(data.get());
                     }
+                }
+            }
+            if (to_spin) {
+                auto action = action_map_.get()->pick_action();
+                if (action) {
+                    action();
+                    rearm_timer();
                 }
             }
         }
@@ -363,6 +371,9 @@ public:
     }
 
 public:
+    static constexpr auto kSpinThreshold = std::chrono::microseconds(1);
+
+public:
     std::function<void(ConnHandle, SharedView)> handler_;
     std::function<std::optional<SharedView>(int endpoint)> greeter_;
 
@@ -391,7 +402,7 @@ public:
     const size_t max_message_size_;
     const std::optional<size_t> max_pending_messages_;
 
-    bus::internal::ExclusiveWrapper<bus::internal::ActionMap, std::recursive_mutex> action_map_;
+    bus::internal::ExclusiveWrapper<bus::internal::ActionMap, internal::SpinLock> action_map_;
 };
 
 TcpBus::TcpBus(Options opts, BufferPool& buffer_pool, EndpointManager& endpoint_manager)
