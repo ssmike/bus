@@ -46,17 +46,28 @@ public:
 protected:
     template<typename RequestProto, typename ResponseProto>
     void register_handler(uint32_t method, std::function<Future<ResponseProto>(int, RequestProto)> handler) {
-        register_raw_handler(method, [handler=std::move(handler)] (int endp, std::string str) {
+        register_raw_handler(method, [handler=std::move(handler)] (int endp, std::string str, std::function<void(std::string)> cb) {
                 RequestProto proto;
                 proto.ParseFromString(str);
-                return handler(endp, std::move(proto)).map([=] (ResponseProto& proto) { return proto.SerializeAsString(); });
+                handler(endp, std::move(proto)).subscribe([cb=std::move(cb)] (ResponseProto& proto) { cb(proto.SerializeAsString()); });
+            });
+    }
+
+    template<typename RequestProto, typename ResponseProto>
+    void register_handler(uint32_t method, std::function<void(int, RequestProto, Promise<ResponseProto>)> handler) {
+        register_raw_handler(method, [handler=std::move(handler)] (int endp, std::string str, std::function<void(std::string)> cb) {
+                RequestProto proto;
+                proto.ParseFromString(str);
+                Promise<ResponseProto> promise;
+                promise.future().subscribe([cb=std::move(cb)] (ResponseProto& proto) { cb(proto.SerializeAsString()); });
+                handler(endp, std::move(proto), promise);
             });
     }
 
 private:
     Future<ErrorT<std::string>> send_raw(std::string serialized, int endpoint, uint64_t method, std::chrono::duration<double> timeout);
 
-    void register_raw_handler(uint32_t method, std::function<Future<std::string>(int, std::string)> handler);
+    void register_raw_handler(uint32_t method, std::function<void(int, std::string, std::function<void(std::string)>)> handler);
 
 private:
     class Impl;
