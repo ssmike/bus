@@ -222,10 +222,12 @@ public:
                 assert(action);
                 action();
             } else {
-                itimerspec spec;
-                spec.it_interval = { 0, 0 };
-                spec.it_value = { secs.count(), nsecs.count() };
-                timerfd_settime(timerfd_, 0, &spec, nullptr);
+                if (interval > kSpinThreshold) {
+                    itimerspec spec;
+                    spec.it_interval = { 0, 0 };
+                    spec.it_value = { secs.count(), nsecs.count() };
+                    timerfd_settime(timerfd_, 0, &spec, nullptr);
+                }
                 return;
             }
         }
