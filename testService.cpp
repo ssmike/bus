@@ -32,7 +32,10 @@ public:
         std::chrono::steady_clock::duration sum = std::chrono::steady_clock::duration::zero();
         for (size_t i = 0; i < repeats; ++i) {
             auto pt = std::chrono::steady_clock::now();
-            send<Operation, Operation>(op, endpoint, 1, std::chrono::seconds(4)).wait();
+            auto f1 = send<Operation, Operation>(op, endpoint, 1, std::chrono::seconds(4));
+            auto f2 = send<Operation, Operation>(op, endpoint, 1, std::chrono::seconds(4));
+            f1.wait().unwrap();
+            f2.wait().unwrap();
             sum += (std::chrono::steady_clock::now() - pt);
         }
 
@@ -66,5 +69,5 @@ int main() {
     second.execute(receiver);
     event.wait();
 
-    std::cerr << "round-trip thru loopback " << std::chrono::duration_cast<std::chrono::nanoseconds>(second.bench(receiver, 100)).count() << std::endl;
+    std::cerr << "round-trip thru loopback " << std::chrono::duration_cast<std::chrono::nanoseconds>(second.bench(receiver, 1000)).count() << std::endl;
 }

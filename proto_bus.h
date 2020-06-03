@@ -28,7 +28,7 @@ public:
     void start();
 
     template<typename RequestProto, typename ResponseProto>
-    Future<ErrorT<ResponseProto>> send(RequestProto proto, int endpoint, uint64_t method, std::optional<std::chrono::duration<double>> timeout) {
+    Future<ErrorT<ResponseProto>> send(RequestProto proto, int endpoint, uint64_t method, std::chrono::duration<double> timeout) {
         return send_raw(proto.SerializeAsString(), endpoint, method, timeout).map(
             [=](ErrorT<std::string>& resp) -> ErrorT<ResponseProto> {
                 if (!resp) {
@@ -54,7 +54,7 @@ protected:
     }
 
 private:
-    Future<ErrorT<std::string>> send_raw(std::string serialized, int endpoint, uint64_t method, std::optional<std::chrono::duration<double>> timeout);
+    Future<ErrorT<std::string>> send_raw(std::string serialized, int endpoint, uint64_t method, std::chrono::duration<double> timeout);
 
     void register_raw_handler(uint32_t method, std::function<Future<std::string>(int, std::string)> handler);
 
