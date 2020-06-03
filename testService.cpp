@@ -24,6 +24,21 @@ public:
         ProtoBus::start();
     }
 
+    std::chrono::steady_clock::duration bench(int endpoint, size_t repeats) {
+        Operation op;
+        op.set_key("key");
+        op.set_value("value");
+
+        std::chrono::steady_clock::duration sum = std::chrono::steady_clock::duration::zero();
+        for (size_t i = 0; i < repeats; ++i) {
+            auto pt = std::chrono::steady_clock::now();
+            send<Operation, Operation>(op, endpoint, 1, std::chrono::seconds(4)).wait();
+            sum += (std::chrono::steady_clock::now() - pt);
+        }
+
+        return sum / repeats;
+    }
+
     void execute(int endpoint) {
         Operation op;
         op.set_key("key");
@@ -50,4 +65,6 @@ int main() {
     int receiver = manager.register_endpoint("::1", 4003);
     second.execute(receiver);
     event.wait();
+
+    std::cerr << "round-trip thru loopback " << std::chrono::duration_cast<std::chrono::nanoseconds>(second.bench(receiver, 100)).count() << std::endl;
 }
