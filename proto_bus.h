@@ -19,6 +19,7 @@ public:
         TcpBus::Options tcp_opts;
         BatchOptions batch_opts;
         std::optional<uint64_t> greeter;
+        bool split_executor = false;
     };
 
 public:

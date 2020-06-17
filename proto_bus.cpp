@@ -3,6 +3,8 @@
 
 #include "service.pb.h"
 
+#include <memory>
+
 namespace bus {
     class ProtoBus::Impl {
     public:
@@ -11,7 +13,8 @@ namespace bus {
             , endpoint_manager_(manager)
             , pool_{ 2 * opts.tcp_opts.max_message_size }
             , bus_(opts.tcp_opts, pool_, manager)
-            , exc_(bus_)
+            , thread_(opts.split_executor ? new internal::DelayedExecutor() : nullptr)
+            , exc_(opts.split_executor ? static_cast<Executor&>(*thread_) : bus_)
             , batch_opts_(opts.batch_opts)
             , flusher_([&]{ timed_flush_batch(); }, opts.batch_opts.max_delay, bus_)
             , loop_([&] { bus_.loop(); }, std::chrono::seconds::zero())
@@ -71,7 +74,14 @@ namespace bus {
                             }
                         }
                         if (to_deliver) {
-                            to_deliver->set_value(ErrorT<std::string>::value(std::move(*header.mutable_data())));
+                            if (thread_) {
+                                thread_->schedule([header=std::move(header), to_deliver=std::move(to_deliver)] () mutable {
+                                        to_deliver->set_value(ErrorT<std::string>::value(std::move(*header.mutable_data())));
+                                    },
+                                    std::chrono::seconds::zero());
+                            } else {
+                                to_deliver->set_value(ErrorT<std::string>::value(std::move(*header.mutable_data())));
+                            }
                         }
                     }
                 }
@@ -122,7 +132,9 @@ namespace bus {
         BufferPool pool_;
         TcpBus bus_;
         std::vector<std::function<void(int, uint32_t, std::string)>> handlers_;
-        bus::Executor& exc_;
+
+        std::unique_ptr<internal::DelayedExecutor> thread_;
+        Executor& exc_;
 
         internal::ExclusiveWrapper<std::unordered_map<int, detail::MessageBatch>> accumulated_;
 
