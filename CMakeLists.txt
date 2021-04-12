@@ -41,5 +41,11 @@ add_executable(testService testService.cpp
 set_property(TARGET testService PROPERTY CXX_STANDARD 17)
 target_link_libraries(testService ${Protobuf_LIBRARIES} bus)
 
+add_executable(benchProxy benchProxy.cpp
+    ${PROTO_SRCS}
+    ${PROTO_HDRS})
+
+target_link_libraries(benchProxy ${Protobuf_LIBRARIES} bus)
+
 add_test(NAME bus COMMAND testBus)
 add_test(NAME service COMMAND testService)
