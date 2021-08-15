@@ -147,14 +147,15 @@ public:
             } else {
                 has_header = true;
                 size_t message_size = internal::read_header(data->ingress_header);
+                if (message_size > max_message_size_) {
+                    throw BusError("too big message");
+                }
                 if (!data->ingress_buf.initialized()) {
                     data->ingress_buf = SharedView(buffer_pool_, message_size);
+                    assert(data->ingress_offset == internal::header_len);
                 }
                 expected = message_size + internal::header_len - data->ingress_offset;
                 data_ptr = data->ingress_buf.data() + (data->ingress_offset - internal::header_len);
-            }
-            if (expected > max_message_size_) {
-                throw BusError("too big message");
             }
             ssize_t res = read(data->socket.get(), data_ptr, expected);
             if (res >= 0) {
