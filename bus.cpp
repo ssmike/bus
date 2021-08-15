@@ -186,9 +186,12 @@ public:
     }
 
     void handle_write(ConnData* data) {
+        auto egress_data = data->egress_data.try_get();
+        if (!egress_data) {
+            return;
+        }
         while (1) {
-            auto egress_data = data->egress_data.try_get();
-            if (!egress_data) {
+            if (!try_write_message(data, egress_data)) {
                 return;
             }
             if (!egress_data->message) {
@@ -199,10 +202,8 @@ public:
                     return;
                 }
                 egress_data->message = queue.front();
-                egress_data->offset = 0; (*messages)[data->endpoint].pop();
-            }
-            if (!try_write_message(data, egress_data)) {
-                return;
+                egress_data->offset = 0;
+                (*messages)[data->endpoint].pop();
             }
         }
     }
