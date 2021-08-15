@@ -307,12 +307,13 @@ public:
             int iovcnt = 2;
             size_t offset = egress_data->offset;
 
-            while (iovcnt > 0 && offset > iov[0].iov_len) {
+            while (iovcnt > 0 && offset >= iov[0].iov_len) {
                 offset -= iov[0].iov_len;
                 ++iov;
+                iovcnt--;
             }
             if (iovcnt == 0) {
-                return 0;
+                return true;
             }
             if (offset > 0) {
                 iov[0].iov_base = ((char*)iov[0].iov_base) + offset;
