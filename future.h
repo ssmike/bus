@@ -21,8 +21,9 @@ namespace bus {
         }
 
         void notify() {
-            if (!event_set_.exchange(true)) {
+            if (!set()) {
                 std::unique_lock<std::mutex> lock(mutex_);
+                event_set_.store(true);
                 cv_.notify_all();
             }
         }
