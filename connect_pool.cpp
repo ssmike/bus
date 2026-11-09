@@ -42,7 +42,7 @@ public:
 
     void set_unavailable(uint64_t id) {
         if (auto data = select(id)) {
-            data->available_ = true;
+            data->available_ = false;
             auto& d_list = by_endpoint_[data->endpoint];
             auto it = d_list.insert(d_list.end(), id);
             d_list.erase(data->by_endpoint_pos_);
@@ -143,6 +143,7 @@ std::shared_ptr<ConnData> ConnectPool::take_available(int endpoint) {
         } else if (!data->available_) {
             return nullptr;
         } else {
+            impl->set_unavailable(data->id);
             return data;
         }
     }
