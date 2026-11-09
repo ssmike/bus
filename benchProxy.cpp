@@ -3,8 +3,11 @@
 
 #include <chrono>
 #include <thread>
+#include <unistd.h>
 
 using namespace bus;
+
+#define ensure(x) if (!(x)) { abort(); }
 
 int main() {
     EndpointManager manager;
@@ -12,17 +15,22 @@ int main() {
     int proxy_endpoint = manager.register_endpoint("::1", 4002);
     int client_endpoint = manager.register_endpoint("::1", 4003);
 
+    std::atomic<size_t> backend_messages_received = 0;
+    std::atomic<size_t> proxy_messages_received = 0;
+
     std::thread backend([&] {
             BufferPool bufferPool{4098};
             TcpBus bus(TcpBus::Options{.port = 4001, .fixed_pool_size = 7}, bufferPool, manager);
             bus.start([&](auto handle, auto blob) {
                     Operation op;
+                    ensure(op.ParseFromArray(blob.data(), blob.size()));
                     op.set_key("answer");
 
                     SharedView buffer{bufferPool, op.ByteSizeLong()};
                     op.SerializeToArray(buffer.data(), buffer.size());
 
-                    bus.send(proxy_endpoint, buffer);
+                    backend_messages_received.fetch_add(1);
+                    ensure(bus.send(proxy_endpoint, buffer));
                 });
             bus.loop();
         });
@@ -31,12 +39,13 @@ int main() {
             BufferPool bufferPool{4098};
             TcpBus bus(TcpBus::Options{.port = 4002, .fixed_pool_size = 7}, bufferPool, manager);
             bus.start([&](auto handle, auto blob) {
+                    proxy_messages_received.fetch_add(1);
                     Operation op;
-                    op.ParseFromArray(blob.data(), blob.size());
+                    ensure(op.ParseFromArray(blob.data(), blob.size()));
                     if (op.key() == "to_proxy") {
-                        bus.send(backend_endpoint, blob);
+                        ensure(bus.send(backend_endpoint, blob));
                     } else {
-                        bus.send(client_endpoint, blob);
+                        ensure(bus.send(client_endpoint, blob));
                     }
                 });
             bus.loop();
@@ -58,7 +67,7 @@ int main() {
     auto pt = std::chrono::steady_clock::now();
     for (size_t i = 0; i < messages_count; ++i) {
         Operation op;
-        op.set_value("value");
+        op.set_value(std::to_string(i));
         op.set_key("to_proxy");
 
         SharedView buffer{bufferPool, op.ByteSizeLong()};
@@ -66,7 +75,12 @@ int main() {
 
         bus.send(proxy_endpoint, buffer);
     }
-    while (messages_received.load() != messages_count) {}
+    while (messages_received.load() != messages_count) {
+        std::cout << messages_received.load() << " messages received" << std::endl;
+        std::cout << backend_messages_received.load() << " backend messages received" << std::endl;
+        std::cout << proxy_messages_received.load() << " proxy messages received" << std::endl;
+        sleep(1);
+    }
 
     std::cerr << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - pt).count() << "/" << messages_count << std::endl;
 
