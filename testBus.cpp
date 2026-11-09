@@ -10,7 +10,7 @@ int main() {
     BufferPool bufferPool{4098};
     EndpointManager manager;
 
-    TcpBus second(TcpBus::Options{.port = 4002, .fixed_pool_size = 2}, bufferPool, manager);
+    TcpBus second(TcpBus::Options{.port = 4002, .min_pool_size = 2}, bufferPool, manager);
 
     constexpr size_t messages_count = 4000;
 
@@ -25,7 +25,7 @@ int main() {
     std::thread t([&] {
         BufferPool bufferPool{4098};
         EndpointManager manager;
-        TcpBus first(TcpBus::Options{.port = 4001, .fixed_pool_size = 2}, bufferPool, manager);
+        TcpBus first(TcpBus::Options{.port = 4001, .min_pool_size = 2}, bufferPool, manager);
 
         size_t messages_received = 0;
 

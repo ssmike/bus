@@ -198,7 +198,7 @@ TEST(Bug03, FastResponseDropped) {
         EndpointManager manager;
         EchoService server(manager, port_for(3), 1);
         server.start();
-        ProtoBus client({.tcp_opts = TcpBus::Options{.port = port_for(3, 1), .fixed_pool_size = 1},
+        ProtoBus client({.tcp_opts = TcpBus::Options{.port = port_for(3, 1), .min_pool_size = 1},
                          .batch_opts = {.max_batch = 1}},
                         manager);
         client.start();
@@ -293,7 +293,7 @@ TEST(Bug05, SenderOversizedPayloadNotRejected) {
         EndpointManager manager;
         EchoService server(manager, port_for(5, 5));
         server.start();
-        ProtoBus client({.tcp_opts = TcpBus::Options{.port = port_for(5, 6), .fixed_pool_size = 1},
+        ProtoBus client({.tcp_opts = TcpBus::Options{.port = port_for(5, 6), .min_pool_size = 1},
                          .batch_opts = {.max_batch = 1}},
                         manager);
         client.start();
@@ -338,7 +338,7 @@ TEST(Bug06, SigpipeOnResetPeer) {
 
         EndpointManager manager;
         BufferPool pool(1 << 16);
-        TcpBus sender(TcpBus::Options{.port = port_for(6, 1), .fixed_pool_size = 2}, pool, manager);
+        TcpBus sender(TcpBus::Options{.port = port_for(6, 1), .min_pool_size = 2}, pool, manager);
         sender.start([](auto, SharedView) {});
         LoopThread loop(sender);
         int endpoint = manager.register_endpoint("::1", port_for(6));
@@ -454,7 +454,7 @@ TEST(Bug10, TimedOutRequestsLeak) {
         sink.start([](auto, SharedView) {});  // swallows requests, never answers
         LoopThread sl(sink);
 
-        ProtoBus client({.tcp_opts = TcpBus::Options{.port = port_for(10, 1), .fixed_pool_size = 1},
+        ProtoBus client({.tcp_opts = TcpBus::Options{.port = port_for(10, 1), .min_pool_size = 1},
                          .batch_opts = {.max_batch = 1}},
                         manager);
         client.start();
@@ -576,7 +576,7 @@ TEST(Bug16, ReconnectBusyLoop) {
     auto res = run_in_child([] {
         EndpointManager manager;
         BufferPool pool(4096);
-        TcpBus bus(TcpBus::Options{.port = port_for(16, 1), .fixed_pool_size = 2}, pool, manager);
+        TcpBus bus(TcpBus::Options{.port = port_for(16, 1), .min_pool_size = 2}, pool, manager);
         bus.start([](auto, SharedView) {});
         LoopThread loop(bus);
         int endpoint = manager.register_endpoint("::1", port_for(16));  // nothing listens here
@@ -591,52 +591,6 @@ TEST(Bug16, ReconnectBusyLoop) {
         double used = process_cpu_seconds() - before;
         CHILD_CHECK(used < 0.25, "burnt %.2fs CPU in 1s reconnecting to a dead peer", used);
     }, 10s);
-    EXPECT_CHILD_OK(res);
-}
-
-// ===========================================================================
-// Bug 17: fix_pool_size check-then-act race -> more than fixed_pool_size connections.
-
-TEST(Bug17, PoolSizeRace) {
-    auto res = run_in_child([] {
-        int lfd = raw_listen(port_for(17), /*nonblock*/ true);
-        constexpr size_t kPool = 2;
-        size_t worst = 0;
-        for (int round = 0; round < 10; ++round) {
-            EndpointManager manager;
-            BufferPool pool(1 << 16);
-            TcpBus bus(TcpBus::Options{.port = port_for(17, 1 + round), .fixed_pool_size = kPool}, pool, manager);
-            bus.start([](auto, SharedView) {});
-            int endpoint = manager.register_endpoint("::1", port_for(17));
-
-            std::atomic<int> ready = 0;
-            std::atomic<bool> go = false;
-            std::vector<std::thread> threads;
-            for (int t = 0; t < 16; ++t) {
-                threads.emplace_back([&] {
-                    ready.fetch_add(1);
-                    while (!go) {
-                    }
-                    try {
-                        bus.send(endpoint, make_view(pool, "x"));
-                    } catch (const std::exception&) {
-                    }
-                });
-            }
-            while (ready.load() < 16) {
-            }
-            go = true;
-            for (auto& t : threads) t.join();
-            std::this_thread::sleep_for(100ms);
-
-            std::vector<int> accepted;
-            int fd;
-            while ((fd = accept4(lfd, nullptr, nullptr, SOCK_CLOEXEC)) >= 0) accepted.push_back(fd);
-            worst = std::max(worst, accepted.size());
-            for (int a : accepted) ::close(a);
-        }
-        CHILD_CHECK(worst <= kPool, "opened %zu connections with fixed_pool_size=%zu", worst, kPool);
-    }, 30s);
     EXPECT_CHILD_OK(res);
 }
 

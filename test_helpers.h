@@ -363,7 +363,7 @@ class EchoService : public bus::ProtoBus {
 public:
     EchoService(bus::EndpointManager& manager, int port, size_t fixed_pool_size = 1, size_t max_message_size = 4098)
         : ProtoBus({.tcp_opts = bus::TcpBus::Options{.port = port,
-                                                     .fixed_pool_size = fixed_pool_size,
+                                                     .min_pool_size = fixed_pool_size,
                                                      .max_message_size = max_message_size},
                     .batch_opts = {.max_batch = 1, .max_delay = std::chrono::seconds(1)}},
                    manager)

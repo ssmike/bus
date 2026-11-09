@@ -14,7 +14,7 @@ class TcpBus : public Executor {
 public:
     struct Options {
         int port = 80;
-        size_t fixed_pool_size = 6;
+        size_t min_pool_size = 6;
         size_t listener_backlog = 60;
         size_t max_message_size = 4098;
         std::optional<size_t> max_pending_messages;

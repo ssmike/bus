@@ -20,7 +20,7 @@ int main() {
 
     std::thread backend([&] {
             BufferPool bufferPool{4098};
-            TcpBus bus(TcpBus::Options{.port = 4001, .fixed_pool_size = 7}, bufferPool, manager);
+            TcpBus bus(TcpBus::Options{.port = 4001, .min_pool_size = 7}, bufferPool, manager);
             bus.start([&](auto handle, auto blob) {
                     Operation op;
                     ensure(op.ParseFromArray(blob.data(), blob.size()));
@@ -37,7 +37,7 @@ int main() {
 
     std::thread proxy([&] {
             BufferPool bufferPool{4098};
-            TcpBus bus(TcpBus::Options{.port = 4002, .fixed_pool_size = 7}, bufferPool, manager);
+            TcpBus bus(TcpBus::Options{.port = 4002, .min_pool_size = 7}, bufferPool, manager);
             bus.start([&](auto handle, auto blob) {
                     proxy_messages_received.fetch_add(1);
                     Operation op;
@@ -55,7 +55,7 @@ int main() {
     std::atomic<size_t> messages_received = 0;
 
     BufferPool bufferPool{4098};
-    TcpBus bus(TcpBus::Options{.port = 4003, .fixed_pool_size = 7}, bufferPool, manager);
+    TcpBus bus(TcpBus::Options{.port = 4003, .min_pool_size = 7}, bufferPool, manager);
     std::thread client([&] {
             bus.start([&](auto handle, auto blob) {
                     messages_received.fetch_add(1);

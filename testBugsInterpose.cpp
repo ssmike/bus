@@ -284,7 +284,7 @@ TEST(Bug02, LostWakeupConcurrentSenders) {
         ByteSink sink(kBug02Port);
         EndpointManager manager;
         BufferPool pool(1 << 16);
-        TcpBus sender(TcpBus::Options{.port = kBug02Port + 1, .fixed_pool_size = 1}, pool, manager);
+        TcpBus sender(TcpBus::Options{.port = kBug02Port + 1, .min_pool_size = 1}, pool, manager);
         sender.start([](auto, SharedView) {});
         LoopThread loop(sender);
         int endpoint = manager.register_endpoint("::1", kBug02Port);
@@ -326,7 +326,7 @@ TEST(Bug02, LostEpolloutDuringEagain) {
         ByteSink sink(kBug02Port + 2);
         EndpointManager manager;
         BufferPool pool(1 << 20);
-        TcpBus sender(TcpBus::Options{.port = kBug02Port + 3, .fixed_pool_size = 1, .max_message_size = 1 << 20},
+        TcpBus sender(TcpBus::Options{.port = kBug02Port + 3, .min_pool_size = 1, .max_message_size = 1 << 20},
                       pool, manager);
         sender.start([](auto, SharedView) {});
         LoopThread loop(sender);

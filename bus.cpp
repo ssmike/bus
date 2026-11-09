@@ -29,7 +29,7 @@ namespace bus {
 class TcpBus::Impl {
 public:
     Impl(bus::TcpBus::Options opts, BufferPool& buffer_pool, EndpointManager& endpoint_manager)
-        : fixed_pool_size_(opts.fixed_pool_size)
+        : min_pool_size_(opts.min_pool_size)
         , port_(opts.port)
         , listener_backlog_(opts.listener_backlog)
         , buffer_pool_(buffer_pool)
@@ -122,8 +122,8 @@ public:
             return;
         }
         size_t pool_size = pool_.count_connections(endpoint);
-        if (pool_size < fixed_pool_size_) {
-            for (; pool_size < fixed_pool_size_; ++pool_size) {
+        if (pool_size < min_pool_size_) {
+            for (; pool_size < min_pool_size_; ++pool_size) {
                 SocketHolder sock = endpoint_manager_.socket(endpoint);
                 uint64_t id = pool_.make_id();
                 endpoint_manager_.async_connect(sock, endpoint);
@@ -409,7 +409,7 @@ public:
     const size_t listener_backlog_;
 
     ConnectPool pool_;
-    const size_t fixed_pool_size_;
+    const size_t min_pool_size_;
 
     internal::ExclusiveWrapper<std::unordered_map<int, std::queue<SharedView>>> pending_messages_;
 
