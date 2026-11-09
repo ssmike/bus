@@ -21,7 +21,6 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 #include <queue>
 
@@ -189,8 +188,8 @@ public:
         }
     }
 
-    void handle_write(ConnData* data) {
-        auto egress_data = data->egress_data.try_get();
+    void handle_write(ConnData* data, bool strong = false) {
+        auto egress_data = strong ? data->egress_data.get() : data->egress_data.try_get();
         if (!egress_data) {
             return;
         }
@@ -203,9 +202,10 @@ public:
                 auto& queue = (*messages)[data->endpoint];
                 if (queue.empty()) {
                     pool_.set_available(data->id);
+                    egress_data.unlock();
                     return;
                 }
-                egress_data->message = queue.front();
+                egress_data->message = std::move(queue.front());
                 egress_data->offset = 0;
                 (*messages)[data->endpoint].pop();
             }
@@ -277,7 +277,7 @@ public:
                         handle_read(data.get());
                     }
                     if (data && (event_buf[i].events & EPOLLOUT) != 0) {
-                        handle_write(data.get());
+                        handle_write(data.get(), true);
                     }
                 }
             }
@@ -369,7 +369,7 @@ public:
             }
         }
         if (auto available_connection = pool_.take_available(endpoint)) {
-            handle_write(available_connection.get());
+            handle_write(available_connection.get(), false);
         }
         return true;
     }

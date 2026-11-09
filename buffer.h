@@ -186,6 +186,13 @@ public:
         return *this;
     }
 
+    SharedView& operator = (SharedView&& oth) {
+        unref();
+        mem_reset();
+        mem_swap(oth);
+        return *this;
+    }
+
     SharedView(SharedView&& oth) {
         mem_swap(oth);
     }
