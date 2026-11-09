@@ -221,7 +221,7 @@ public:
             auto interval = *next - now;
             auto secs = std::chrono::duration_cast<std::chrono::seconds>(interval);
             auto nsecs = std::chrono::duration_cast<std::chrono::nanoseconds>(interval - secs);
-            if (nsecs.count() < 1) {
+            if (secs.count() < 1 && nsecs.count() < 1) {
                 auto action = mp->pick_action();
                 mp.unlock();
                 assert(action);
