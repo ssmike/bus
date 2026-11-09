@@ -282,11 +282,7 @@ public:
                 }
             }
             if (to_spin) {
-                auto action = action_map_.get()->pick_action();
-                if (action) {
-                    action();
-                    rearm_timer();
-                }
+                rearm_timer();
             }
         }
     }
