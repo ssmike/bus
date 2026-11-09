@@ -114,6 +114,9 @@ std::shared_ptr<ConnData> ConnectPool::select(uint64_t id) {
 void ConnectPool::rebind(uint64_t id, int endpoint) {
     auto impl = impl_.get();
     auto data = impl->select(id);
+    if (!data) {
+        throw BusError("unknown conn id");
+    }
     impl->by_endpoint_[data->endpoint].erase(data->by_endpoint_pos_);
     data->endpoint = endpoint;
     if (data->available_) {
