@@ -171,6 +171,7 @@ size_t ConnectPool::count_connections() {
 
 void ConnectPool::close(uint64_t id) {
     impl_.get()->close(id);
+    size_.fetch_sub(1);
 }
 
 void ConnectPool::close_old_conns(size_t cnt) {
