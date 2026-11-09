@@ -43,7 +43,7 @@ public:
         sockaddr_in6 addr;
         {
             auto state = state_.get();
-            if (endpoint > state->endpoints_.size()) {
+            if (endpoint >= state->endpoints_.size()) {
                 throw BusError("invalid endpoint");
             }
             addr = state->endpoints_[endpoint];
