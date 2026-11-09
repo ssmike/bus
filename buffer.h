@@ -45,7 +45,7 @@ public:
     };
 
 public:
-    BufferPool(uint32_t size)
+    BufferPool(uint64_t size)
         : size_(size)
     {
     }

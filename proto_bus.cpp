@@ -19,7 +19,7 @@ namespace bus {
             , flusher_([&]{ timed_flush_batch(); }, opts.batch_opts.max_delay, bus_)
             , loop_([&] { bus_.loop(); }, std::chrono::seconds::zero())
         {
-            bus_.set_greeter([=] (int endpoint) {
+            bus_.set_greeter([=, this] (int endpoint) {
                     detail::Greeter greeter;
                     greeter.set_port(opts.tcp_opts.port);
                     greeter.set_force_endpoint(greeter_.has_value());
@@ -98,7 +98,7 @@ namespace bus {
         }
 
         void timed_flush_batch() {
-            exc_.schedule([=] { timed_flush_batch(); }, batch_opts_.max_delay);
+            exc_.schedule([=, this] { timed_flush_batch(); }, batch_opts_.max_delay);
             std::unordered_map<int, detail::MessageBatch> accumulated;
             accumulated_.get()->swap(accumulated);
             for (auto& [endpoint, batch] : accumulated) {
@@ -153,13 +153,15 @@ namespace bus {
         header.set_type(detail::Message::REQUEST);
         header.set_data(std::move(serialized));
         header.set_method(method);
-        if (!impl_->send_item(endpoint, std::move(header))) {
-            return bus::make_future(ErrorT<std::string>::error("too many pending messages"));
-        }
-
         Promise<ErrorT<std::string>> promise;
         impl_->sent_requests_.get()->insert({ seq_id, promise });
-        impl_->exc_.schedule([=] () mutable {
+        if (!impl_->send_item(endpoint, std::move(header))) {
+            promise.set_value(ErrorT<std::string>::error("too many pending messages"));
+            impl_->sent_requests_.get()->erase(seq_id);
+            return promise.future();
+        }
+
+        impl_->exc_.schedule([=, this] () mutable {
                 if (auto requests = impl_->sent_requests_.get(); requests->find(seq_id) == requests->end()) {
                     return;
                 }
@@ -173,7 +175,7 @@ namespace bus {
         impl_->handlers_.resize(std::max<uint32_t>(impl_->handlers_.size(), method + 1));
         impl_->handlers_[method] =
             [handler=std::move(handler), this, method] (int endpoint, uint32_t seq_id, std::string str) {
-                handler(endpoint, std::move(str), [=](std::string str) {
+                handler(endpoint, std::move(str), [=, this](std::string str) {
                     bus::detail::Message header;
                     header.set_type(detail::Message::RESPONSE);
                     header.set_data(str);
@@ -194,6 +196,7 @@ namespace bus {
     }
 
     ProtoBus::~ProtoBus() {
+        impl_->loop_.signal_stop();
         impl_->bus_.to_break();
     }
 

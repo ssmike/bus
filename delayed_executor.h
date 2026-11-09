@@ -27,9 +27,13 @@ public:
         ready_.notify();
     }
 
-    ~DelayedExecutor() {
+    void signal_stop() {
         shot_down_.store(true);
         ready_.notify();
+    }
+
+    ~DelayedExecutor() {
+        signal_stop();
         shot_down_event_.wait();
 
         thread_.join();
@@ -42,7 +46,7 @@ private:
 
             auto now = std::chrono::system_clock::now();
             ready_.reset();
-            while (true) {
+            while (!shot_down_.load()) {
                 std::function<void()> to_execute;
                 {
                     auto actions = actions_.get();
@@ -110,6 +114,10 @@ public:
 
     void trigger() {
         backend_->schedule(std::bind(&PeriodicExecutor::execute_once, this), std::chrono::seconds::zero());
+    }
+
+    void signal_stop() {
+        executor_holder_->signal_stop();
     }
 
 private:
