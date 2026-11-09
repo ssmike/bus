@@ -98,7 +98,7 @@ namespace bus {
         }
 
         void timed_flush_batch() {
-            exc_.schedule([=, this] { timed_flush_batch(); }, batch_opts_.max_delay);
+            //exc_.schedule([=, this] { timed_flush_batch(); }, batch_opts_.max_delay);
             std::unordered_map<int, detail::MessageBatch> accumulated;
             accumulated_.get()->swap(accumulated);
             for (auto& [endpoint, batch] : accumulated) {
@@ -164,6 +164,8 @@ namespace bus {
         impl_->exc_.schedule([=, this] () mutable {
                 if (auto requests = impl_->sent_requests_.get(); requests->find(seq_id) == requests->end()) {
                     return;
+                } else {
+                    requests->erase(seq_id);
                 }
                 promise.set_value(ErrorT<std::string>::error("timeout exceeded"));
             },
