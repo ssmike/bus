@@ -131,7 +131,7 @@ namespace bus {
         EndpointManager& endpoint_manager_;
         BufferPool pool_;
         TcpBus bus_;
-        std::vector<std::function<void(int, uint32_t, std::string)>> handlers_;
+        std::vector<std::function<void(int, uint64_t, std::string)>> handlers_;
 
         std::unique_ptr<internal::DelayedExecutor> thread_;
         Executor& exc_;
@@ -174,7 +174,7 @@ namespace bus {
     void ProtoBus::register_raw_handler(uint32_t method, std::function<void(int, std::string, std::function<void(std::string)>)> handler) {
         impl_->handlers_.resize(std::max<uint32_t>(impl_->handlers_.size(), method + 1));
         impl_->handlers_[method] =
-            [handler=std::move(handler), this, method] (int endpoint, uint32_t seq_id, std::string str) {
+            [handler=std::move(handler), this, method] (int endpoint, uint64_t seq_id, std::string str) {
                 handler(endpoint, std::move(str), [=, this](std::string str) {
                     bus::detail::Message header;
                     header.set_type(detail::Message::RESPONSE);
