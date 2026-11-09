@@ -74,6 +74,8 @@ public:
         conn.errno_ = errno;
         if (conn.sock_.get() < 0) {
             conn.sock_ = SocketHolder();
+        } else {
+            set_nodelay(conn.sock_.get());
         }
         return conn;
     }
