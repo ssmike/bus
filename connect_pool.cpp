@@ -50,6 +50,18 @@ public:
         }
     }
 
+    void close(uint64_t id) {
+        auto it = this->by_id_.find(id);
+        if (it != this->by_id_.end()) {
+            this->by_endpoint_[it->second->endpoint].erase(it->second->by_endpoint_pos_);
+            this->by_usage_.erase(it->second->usage_list_pos_);
+            if (this->by_endpoint_[it->second->endpoint].empty()) {
+                this->by_endpoint_.erase(it->second->endpoint);
+            }
+            this->by_id_.erase(it);
+        }
+    }
+
 public:
     std::unordered_map<uint64_t, std::shared_ptr<PoolItem>> by_id_;
     std::unordered_map<int, std::list<uint64_t>> by_endpoint_;
@@ -157,24 +169,15 @@ size_t ConnectPool::count_connections() {
 }
 
 void ConnectPool::close(uint64_t id) {
-    auto impl = impl_.get();
-    auto it = impl->by_id_.find(id);
-    if (it != impl->by_id_.end()) {
-        impl->by_endpoint_[it->second->endpoint].erase(it->second->by_endpoint_pos_);
-        impl->by_usage_.erase(it->second->usage_list_pos_);
-        if (impl->by_endpoint_[it->second->endpoint].empty()) {
-            impl->by_endpoint_.erase(it->second->endpoint);
-        }
-        impl->by_id_.erase(it);
-    }
+    impl_.get()->close(id);
 }
 
 void ConnectPool::close_old_conns(size_t cnt) {
     auto impl = impl_.get();
-    for (size_t i = 0; i < 2 && !impl->by_usage_.empty(); ++i) {
+    for (size_t i = 0; i < cnt && !impl->by_usage_.empty(); ++i) {
         auto it = --(impl->by_usage_.end());
         uint64_t id = *it;
-        close(id);
+        impl->close(id);
 
         if (!impl->by_usage_.empty()) {
             it =  --(impl->by_usage_.end());
