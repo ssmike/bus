@@ -93,6 +93,9 @@ public:
     ~Impl() {
         ::close(listensock_);
         ::close(epollfd_);
+        ::close(breakfd_);
+        ::close(timerfd_);
+        ::close(timerctlfd_);
     }
 
     void accept_conns() {
@@ -305,7 +308,7 @@ public:
             iov_holder[1] = {.iov_base = (void*)egress_data->message->data(), .iov_len = egress_data->message->size()};
 
             iovec* iov = iov_holder;
-            int iovcnt = 2;
+            size_t iovcnt = 2;
             size_t offset = egress_data->offset;
 
             while (iovcnt > 0 && offset >= iov[0].iov_len) {
@@ -320,7 +323,11 @@ public:
                 iov[0].iov_base = ((char*)iov[0].iov_base) + offset;
                 iov[0].iov_len -= offset;
             }
-            ssize_t res = writev(fd, iov, iovcnt);
+            struct msghdr hdr{
+                .msg_iov = iov_holder,
+                .msg_iovlen = iovcnt,
+            };
+            ssize_t res = sendmsg(fd, &hdr, MSG_NOSIGNAL|MSG_DONTWAIT);
             if (res >= 0) {
                 egress_data->offset += res;
                 if (egress_data->offset == internal::header_len + egress_data->message->size()) {
@@ -382,11 +389,11 @@ public:
     std::function<void(ConnHandle, SharedView)> handler_;
     std::function<std::optional<SharedView>(int endpoint)> greeter_;
 
-    int epollfd_;
-    int listensock_;
-    int breakfd_;
-    int timerfd_;
-    int timerctlfd_;
+    int epollfd_ = -1;
+    int listensock_ = -1;
+    int breakfd_ = -1;
+    int timerfd_ = -1;
+    int timerctlfd_ = -1;
 
     size_t break_id_;
     size_t listen_id_;
