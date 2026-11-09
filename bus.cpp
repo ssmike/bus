@@ -34,6 +34,7 @@ public:
         , listener_backlog_(opts.listener_backlog)
         , buffer_pool_(buffer_pool)
         , endpoint_manager_(endpoint_manager)
+        , stable_connection_pools_(opts.stable_connection_pools)
         , max_message_size_(opts.max_message_size)
         , max_pending_messages_(opts.max_pending_messages)
     {
@@ -150,7 +151,7 @@ public:
                 has_header = true;
                 size_t message_size = internal::read_header(data->ingress_header);
                 if (message_size > max_message_size_) {
-                    throw BusError("too big message");
+                    return pool_.close(data->id); // oversized message
                 }
                 if (!data->ingress_buf.initialized()) {
                     data->ingress_buf = SharedView(buffer_pool_, message_size);
@@ -270,7 +271,9 @@ public:
                     int endpoint = data->endpoint;
                     if (event_buf[i].events & EPOLLERR) {
                         pool_.close(id);
+                        //if (stable_connection_pools_) {
                         fix_pool_size(endpoint);
+                        //}
                         continue;
                     }
                     if (event_buf[i].events & EPOLLIN) {
@@ -342,6 +345,9 @@ public:
     }
 
     void answer(uint64_t conn_id, SharedView message) {
+        if (message.size() > max_message_size_) {
+            return;
+        }
         if (auto data = pool_.select(conn_id)) {
             auto egress_data = data->egress_data.get();
             if (egress_data->message) {
@@ -354,6 +360,9 @@ public:
     }
 
     bool send(int endpoint, SharedView message) {
+        if (message.size() > max_message_size_) {
+            return false;
+        }
         fix_pool_size(endpoint);
         {
             auto messages = pending_messages_.get();
@@ -407,6 +416,7 @@ public:
     BufferPool& buffer_pool_;
     EndpointManager& endpoint_manager_;
 
+    bool stable_connection_pools_;
     const size_t max_message_size_;
     const std::optional<size_t> max_pending_messages_;
 

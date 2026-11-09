@@ -50,6 +50,10 @@ public:
     {
     }
 
+    uint64_t max_message_size() const {
+        return size_;
+    }
+
     DataPtr take(size_t size) {
         if (size > size_) {
             throw std::runtime_error("bad buffer alloc");

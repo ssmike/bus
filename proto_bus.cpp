@@ -58,7 +58,11 @@ namespace bus {
                 for (auto& header : *batch.mutable_item()) {
                     if (header.type() == detail::Message::REQUEST) {
                         if (handlers_.size() <= header.method() || !handlers_[header.method()]) {
-                            throw BusError("invalid handler number");
+                            detail::Message errMsg;
+                            errMsg.set_err_data("invalid handler number");
+                            errMsg.set_seq_id(header.seq_id());
+                            errMsg.set_type(detail::Message::RESPONSE);
+                            send_item(handle.endpoint, std::move(errMsg));
                         } else {
                             handlers_[header.method()](handle.endpoint, header.seq_id(), std::move(*header.mutable_data()));
                         }
@@ -76,11 +80,19 @@ namespace bus {
                         if (to_deliver) {
                             if (thread_) {
                                 thread_->schedule([header=std::move(header), to_deliver=std::move(to_deliver)] () mutable {
-                                        to_deliver->set_value(ErrorT<std::string>::value(std::move(*header.mutable_data())));
+                                        if (!header.err_data().empty()) {
+                                            to_deliver->set_value(ErrorT<std::string>::error(std::move(*header.mutable_err_data())));
+                                        } else {
+                                            to_deliver->set_value(ErrorT<std::string>::value(std::move(*header.mutable_data())));
+                                        }
                                     },
                                     std::chrono::seconds::zero());
                             } else {
-                                to_deliver->set_value(ErrorT<std::string>::value(std::move(*header.mutable_data())));
+                                if (!header.err_data().empty()) {
+                                    to_deliver->set_value(ErrorT<std::string>::error(std::move(*header.mutable_err_data())));
+                                } else {
+                                    to_deliver->set_value(ErrorT<std::string>::value(std::move(*header.mutable_data())));
+                                }
                             }
                         }
                     }
@@ -88,9 +100,12 @@ namespace bus {
             }
         }
 
-        bool flush_batch(int endpoint, detail::MessageBatch batch) {
+        bool flush_batch(int endpoint, const detail::MessageBatch& batch) {
             if (!batch.item_size()) {
                 return true;
+            }
+            if (pool_.max_message_size() < batch.ByteSizeLong()) {
+                return false;
             }
             auto buffer = SharedView(pool_, batch.ByteSizeLong());
             batch.SerializeToArray(buffer.data(), buffer.size());
@@ -98,11 +113,23 @@ namespace bus {
         }
 
         void timed_flush_batch() {
-            //exc_.schedule([=, this] { timed_flush_batch(); }, batch_opts_.max_delay);
             std::unordered_map<int, detail::MessageBatch> accumulated;
             accumulated_.get()->swap(accumulated);
             for (auto& [endpoint, batch] : accumulated) {
-                flush_batch(endpoint, std::move(batch));
+                if (!flush_batch(endpoint, batch)) {
+                    for (auto msg : batch.item()) {
+                        auto promise = Promise<ErrorT<std::string>>::uninit();
+                        {
+                            auto requests = sent_requests_.get();
+                            auto it = requests->find(msg.seq_id());
+                            if (it != requests->end()) {
+                                promise = std::move(it->second);
+                            }
+                            requests->erase(it);
+                        }
+                        promise.set_value(ErrorT<std::string>::error("request rejected locally"));
+                    }
+                }
             }
         }
 
@@ -120,7 +147,7 @@ namespace bus {
                 }
             }
             if (to_flush.has_value()) {
-                return flush_batch(endpoint, std::move(to_flush.value()));
+                return flush_batch(endpoint, to_flush.value());
             }
             return true;
         }

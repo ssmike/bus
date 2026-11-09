@@ -18,6 +18,7 @@ message Message {
 
     uint32 method = 3;
     bytes data = 4;
+    string err_data = 5;
 }
 
 message MessageBatch {

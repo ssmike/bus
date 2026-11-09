@@ -252,6 +252,9 @@ Future<T> make_future(T&& t) {
 
 template<typename T>
 class Promise {
+private:
+    Promise(std::shared_ptr<internal::FutureState<T>> ptr): state_(ptr) {}
+
 public:
     Promise() : state_(new internal::FutureState<T>()) {}
 
@@ -260,6 +263,10 @@ public:
 
     Promise<T>& operator = (const Promise<T>&) = default;
     Promise<T>& operator = (Promise<T>&&) = default;
+
+    static Promise<T> uninit() {
+        return Promise(nullptr);
+    }
 
     void swap(Promise<T>& other) {
         state_.swap(other.state_);

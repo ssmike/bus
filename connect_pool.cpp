@@ -50,7 +50,7 @@ public:
         }
     }
 
-    void close(uint64_t id) {
+    bool close(uint64_t id) {
         auto it = this->by_id_.find(id);
         if (it != this->by_id_.end()) {
             this->by_endpoint_[it->second->endpoint].erase(it->second->by_endpoint_pos_);
@@ -59,7 +59,9 @@ public:
                 this->by_endpoint_.erase(it->second->endpoint);
             }
             this->by_id_.erase(it);
+            return true;
         }
+        return false;
     }
 
 public:
@@ -173,8 +175,9 @@ size_t ConnectPool::count_connections() {
 }
 
 void ConnectPool::close(uint64_t id) {
-    impl_.get()->close(id);
-    size_.fetch_sub(1);
+    if (impl_.get()->close(id)) {
+        size_.fetch_sub(1);
+    }
 }
 
 void ConnectPool::close_old_conns(size_t cnt) {

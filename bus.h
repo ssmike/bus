@@ -18,6 +18,7 @@ public:
         size_t listener_backlog = 60;
         size_t max_message_size = 4098;
         std::optional<size_t> max_pending_messages;
+        bool stable_connection_pools = false;
     };
 
     struct ConnHandle {
